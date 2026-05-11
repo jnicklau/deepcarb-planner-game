@@ -152,12 +152,13 @@ THEME = {
 
 # Icon characters used throughout the UI
 ICONS = {
+    "co2":    "CO₂",
     "sun":     "☀",
     "wind":    "💨",
     "water":   "💧",
     "battery": "🔋",
     "energy":  "⚡",
-    "order":   "▶",
+    "order":    "⚙",
     "cont":    "…",
     "done":    "pt",
     "recover": "♻",

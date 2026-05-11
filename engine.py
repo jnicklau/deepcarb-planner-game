@@ -125,10 +125,21 @@ class Player:
     # ── Scoring ───────────────────────────────────────────────────────────────
 
     def compute_score(self) -> int:
-        return sum(self.score_breakdown().values())
+        """
+        Compute final score based on completed orders, stored batteries, and CO₂ penalties.
+        Exclude total energy from scoring but include it in the breakdown for tie-breaking purposes.
+        """
+        return sum(self.score_breakdown().values()) - self.score_breakdown()["total_energy"]
 
     def score_breakdown(self) -> dict[str, int]:
-        """Return individual scoring components as a dict."""
+        """
+        Return individual scoring components as a dict 
+        with keys: 
+            - "order_pts": points from completed orders
+            - "battery_bonus": points from stored batteries at game end
+            - "co2_penalty": negative points from bought conventional energy
+            - "total_energy": total energy collected across all days (for tie-breaking)
+        """
         order_pts = 0
         for day in range(len(DAYS)):
             for tile in self.factory_planner[day]:

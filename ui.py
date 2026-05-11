@@ -799,20 +799,46 @@ class DeepCarbPlannerApp(tk.Tk):
         win.title(f"End of {summary['day_name']} — Day Summary")
         win.configure(bg=THEME["bg_dark"])
         win.grab_set()
-        win.resizable(False, False)
+        win.resizable(True, True)
+        win.geometry("520x560")
 
+        # ── Fixed header ──────────────────────────────────────────────────────
+        header_frame = tk.Frame(win, bg=THEME["bg_dark"])
+        header_frame.pack(fill="x")
         tk.Label(
-            win, text=f"End of {summary['day_name']}",
+            header_frame, text=f"End of {summary['day_name']}",
             font=FONTS["title"], fg=THEME["accent"], bg=THEME["bg_dark"],
         ).pack(pady=(20, 4), padx=30)
         tk.Label(
-            win, text="Energy balance for each player",
+            header_frame, text="Energy balance for each player",
             font=FONTS["small"], fg=THEME["muted"], bg=THEME["bg_dark"],
         ).pack(pady=(0, 16))
 
+        # ── Scrollable middle section ─────────────────────────────────────────
+        scroll_canvas = tk.Canvas(win, bg=THEME["bg_dark"], highlightthickness=0)
+        vsb = ttk.Scrollbar(win, orient="vertical", command=scroll_canvas.yview)
+        scroll_canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        scroll_canvas.pack(side="top", fill="both", expand=True)
+        scroll_canvas.bind(
+            "<MouseWheel>",
+            lambda e: scroll_canvas.yview_scroll(-1 * (e.delta // 120), "units"),
+        )
+
+        inner = tk.Frame(scroll_canvas, bg=THEME["bg_dark"])
+        win_id = scroll_canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind(
+            "<Configure>",
+            lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all")),
+        )
+        scroll_canvas.bind(
+            "<Configure>",
+            lambda e: scroll_canvas.itemconfig(win_id, width=e.width),
+        )
+
         for ps in summary["players"]:
             p = ps["player"]
-            frame = tk.Frame(win, bg=THEME["bg_panel"], padx=16, pady=10)
+            frame = tk.Frame(inner, bg=THEME["bg_panel"], padx=16, pady=10)
             frame.pack(fill="x", padx=20, pady=4)
 
             # Player name header
@@ -853,7 +879,7 @@ class DeepCarbPlannerApp(tk.Tk):
 
         # ── Next-day turn order ──────────────────────────────────────────
         if "next_day_order" in summary:
-            order_frame = tk.Frame(win, bg=THEME["bg_panel"], padx=16, pady=10)
+            order_frame = tk.Frame(inner, bg=THEME["bg_panel"], padx=16, pady=10)
             order_frame.pack(fill="x", padx=20, pady=(0, 4))
             tk.Label(
                 order_frame,
@@ -870,12 +896,13 @@ class DeepCarbPlannerApp(tk.Tk):
                     anchor="w",
                 ).pack(anchor="w")
 
+        # ── Fixed footer: dismiss button ──────────────────────────────────────
         is_last = self.engine.game_over
         btn_text = "See Final Scores" if is_last else f"Start {DAYS[self.engine.current_day]}"
         _styled_button(
             win, btn_text, THEME["accent"], win.destroy,
             padx=20, pady=8, font=FONTS["heading"],
-        ).pack(pady=20)
+        ).pack(pady=12)
 
         win.bind("<Return>", lambda e: win.destroy())
         win.bind("<KP_Enter>", lambda e: win.destroy())
@@ -1091,10 +1118,10 @@ class DeepCarbPlannerApp(tk.Tk):
                      ).grid(row=0, column=0, columnspan=2, sticky="w")
 
             rows = [
-                (f"{ICONS['order']} Orders",         f"+{bd['order_pts']} pts",   THEME["accent"]),
-                (f"{ICONS['battery']} Battery bonus", f"+{bd['battery_bonus']} pts", THEME["battery"]),
-                ("CO\u2082 penalty",                    f"{bd['co2_penalty']} pts",  THEME["warning"]),
-                (f"{ICONS['energy']} Energy collected", f"{bd['total_energy']}",   THEME["muted"]),
+                (f"Orders {ICONS['order']}",         f"+{bd['order_pts']} pts",   THEME["order"]),
+                (f"Battery bonus {ICONS['battery']}", f"+{bd['battery_bonus']} pts", THEME["battery"]),
+                (f"CO\u2082 penalty {ICONS['co2']}",    f"{bd['co2_penalty']} pts",  THEME["warning"]),
+                (f"Energy collected {ICONS['energy']}", f"{bd['total_energy']}",   THEME["muted"]),
                 ("Total",                             f"{total} pts",             "white"),
             ]
             for r, (lbl, val, col) in enumerate(rows, start=1):
