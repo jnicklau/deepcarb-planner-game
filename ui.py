@@ -616,10 +616,17 @@ class DeepCarbPlannerApp(tk.Tk):
 
             name_fg = player.color if is_active else THEME["muted"]
             name_font = FONTS["heading"] if not is_active else ("Helvetica", 12, "bold")
+            pick_pos  = eng.turn_order.index(eng.players.index(player)) + 1  # 1-based
+            name_cell = tk.Frame(pframe, bg=THEME["bg_dark"])
+            name_cell.grid(row=0, column=0, rowspan=ROWS_PER_DAY, sticky="nsew")
             tk.Label(
-                pframe, text=player.name, font=name_font,
+                name_cell, text=player.name, font=name_font,
                 fg=name_fg, bg=THEME["bg_dark"], width=12,
-            ).grid(row=0, column=0, rowspan=ROWS_PER_DAY, sticky="nsew")
+            ).pack(anchor="center", expand=True)
+            tk.Label(
+                name_cell, text=f"pick #{pick_pos}", font=FONTS["small"],
+                fg=name_fg, bg=THEME["bg_dark"],
+            ).pack(anchor="s", pady=(0, 2))
 
             # Cells consumed (col>0) by a spanning order tile
             consumed: set[tuple[int, int]] = set()
