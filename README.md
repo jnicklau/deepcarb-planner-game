@@ -66,4 +66,16 @@ game_ui_ai/
 
 ## License
 
-MIT
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** license.
+
+You are free to:
+- **Use** and **share** this project for personal, educational, or research purposes
+- **Adapt** or build upon it
+
+Under the following conditions:
+- **Attribution** — You must give appropriate credit and link to this repository
+- **NonCommercial** — You may **not** use this project or its concepts for commercial purposes
+
+> © 2026 HTWG Konstanz. All commercial rights reserved.
+
+Full license text: https://creativecommons.org/licenses/by-nc/4.0/
