@@ -26,14 +26,7 @@ No third-party packages are required.
 ```bash
 # Clone the repository
 git clone https://github.com/jnicklau/deepcarb-planner-game
-cd deepcarb-planner
-
-# (Optional) create and activate a virtual environment
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
+cd deepcarb-planner-game
 ```
 
 ## Running the game
@@ -45,7 +38,7 @@ python run.py
 ## Project structure
 
 ```
-game_ui_ai/
+deepcarb-planner-game/
 ├── run.py        # Entry point — just launches the app
 ├── ui.py         # All tkinter UI code
 ├── engine.py     # Game logic (no UI imports)
