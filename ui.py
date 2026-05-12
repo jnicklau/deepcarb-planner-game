@@ -373,7 +373,7 @@ class DeepCarbPlannerApp(tk.Tk):
             icon = ICONS[etype]
             tk.Label(row_f, text=icon, font=FONTS["small"],
                      fg=hist_colors[etype], bg=THEME["bg_dark"], width=2).pack(side="left")
-            c = tk.Canvas(row_f, bg=THEME["bg_panel"], height=75,
+            c = tk.Canvas(row_f, bg=THEME["bg_panel"], height=110,
                           highlightthickness=0)
             c.pack(side="left", fill="x", expand=True)
             self._hist_canvases[etype] = c
@@ -911,11 +911,28 @@ class DeepCarbPlannerApp(tk.Tk):
         self.wait_window(win)
 
     def _draw_histograms(self):
-        """Draw proportional-fill vertical bar charts for each energy type."""
+        """Draw proportional-fill vertical bar charts for each energy type.
+        All three charts share the same x-axis positions so identical values
+        (e.g. all '2' bars) line up vertically across the three rows."""
         stats = self.engine.pool_stats()
         hist_colors = {"sun": THEME["sun"], "wind": THEME["wind"], "water": THEME["water"]}
         gray = "#555566"
         PAD_L, PAD_R, PAD_T, PAD_B = 4, 4, 4, 16  # px; bottom reserved for labels
+
+        # Build a shared, sorted value axis from all energy types combined
+        all_values = sorted({v for etype in ("sun", "wind", "water")
+                               for v in stats.get(etype, {}).keys()})
+        if not all_values:
+            return
+        n = len(all_values)
+        val_index = {v: i for i, v in enumerate(all_values)}
+
+        # Global max total so bar heights are comparable across types
+        max_tot = max(
+            (tot for etype in ("sun", "wind", "water")
+             for tot, _ in stats.get(etype, {}).values()),
+            default=1,
+        ) or 1
 
         for etype, canvas in self._hist_canvases.items():
             canvas.delete("all")
@@ -924,35 +941,30 @@ class DeepCarbPlannerApp(tk.Tk):
             H = canvas.winfo_height() or 55
 
             type_stats = stats.get(etype, {})
-            if not type_stats:
-                continue
-
-            values   = sorted(type_stats.keys())
-            max_tot  = max(tot for tot, _ in type_stats.values()) or 1
-            n        = len(values)
-            bar_w    = max(4, (W - PAD_L - PAD_R) // n - 2)
             chart_h  = H - PAD_T - PAD_B
             color    = hist_colors[etype]
+            slot_w   = (W - PAD_L - PAD_R) / n
+            bar_w    = max(4, int(slot_w) - 2)
+            y_bot    = H - PAD_B
 
-            for i, v in enumerate(values):
-                total, used = type_stats[v]
-                x0 = PAD_L + i * ((W - PAD_L - PAD_R) // n)
+            for v in all_values:
+                i = val_index[v]
+                x0 = int(PAD_L + i * slot_w)
                 x1 = x0 + bar_w
-                full_h   = int(chart_h * total / max_tot)
-                used_h   = int(full_h  * used  / total) if total else 0
-                remain_h = full_h - used_h
 
-                y_bot = H - PAD_B
-                # gray (used) portion — fills from bottom
-                if used_h > 0:
-                    canvas.create_rectangle(x0, y_bot - used_h, x1, y_bot,
-                                            fill=gray, outline="")
-                # colored (remaining) portion — sits on top of gray
-                if remain_h > 0:
-                    canvas.create_rectangle(x0, y_bot - full_h, x1, y_bot - used_h,
-                                            fill=color, outline="")
+                if v in type_stats:
+                    total, used = type_stats[v]
+                    full_h   = int(chart_h * total / max_tot)
+                    used_h   = int(full_h * used / total) if total else 0
+                    remain_h = full_h - used_h
+                    if used_h > 0:
+                        canvas.create_rectangle(x0, y_bot - used_h, x1, y_bot,
+                                                fill=gray, outline="")
+                    if remain_h > 0:
+                        canvas.create_rectangle(x0, y_bot - full_h, x1, y_bot - used_h,
+                                                fill=color, outline="")
 
-                # value label below bar
+                # value label — drawn even if this type has no bar for that value
                 canvas.create_text((x0 + x1) // 2, H - PAD_B + 4,
                                    text=str(v), font=("Helvetica", 7),
                                    fill=THEME["muted"], anchor="n")
