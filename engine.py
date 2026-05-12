@@ -11,6 +11,7 @@ import copy
 from config import (
     DAYS, ROWS_PER_DAY, BATTERY_CAPACITY, STARTING_BATTERIES,
     BATTERY_BONUS, CONV_ENERGY_PENALTY,
+    EXTRA_BATTERY_COST, MAX_EXTRA_BATTERY_SLOTS, EXTRA_BATTERY_SLOTS_PER_PURCHASE,
     WEATHER_POOL, WEATHER_TILES_MIN, WEATHER_TILES_MAX,
     ORDER_TEMPLATES, ORDERS_PER_SLOT_SMALL, ORDERS_PER_SLOT_LARGE,
     MAX_ORDER_DURATION_BY_DAY,
@@ -86,8 +87,14 @@ class Player:
             [None] * ROWS_PER_DAY for _ in range(len(DAYS))
         ]
         self.battery_storage: int = STARTING_BATTERIES
+        self.extra_battery_slots: int = 0   # extra capacity bought via bundles
         self.conventional_energy: int = 0
         self.priority: int = color_idx + 1
+
+    @property
+    def battery_capacity(self) -> int:
+        """Current maximum battery storage for this player."""
+        return BATTERY_CAPACITY + self.extra_battery_slots
 
     # ── Factory planner helpers ────────────────────────────────────────────────
 
@@ -155,6 +162,9 @@ class Player:
                 break
 
         co2_penalty = -(self.conventional_energy * CONV_ENERGY_PENALTY)
+        # Each bundle of EXTRA_BATTERY_SLOTS_PER_PURCHASE slots costs EXTRA_BATTERY_COST pt
+        bundles     = self.extra_battery_slots // EXTRA_BATTERY_SLOTS_PER_PURCHASE
+        slot_cost   = -(bundles * EXTRA_BATTERY_COST)
 
         total_energy = sum(
             tile["value"]
@@ -167,6 +177,7 @@ class Player:
             "order_pts":    order_pts,
             "battery_bonus": battery_bonus,
             "co2_penalty":  co2_penalty,
+            "slot_cost":    slot_cost,
             "total_energy": total_energy,
         }
 
@@ -192,8 +203,8 @@ class GameEngine:
         self.day_ended: bool = False
         self.game_over: bool = False
         self.log_messages: list[str] = []
-        # Filled at end of each day; cleared by UI after it displays the summary
         self.day_summary: dict | None = None
+        self.pre_day_pending: bool = True  # show slot-purchase popup at day start
 
     # ── Setup helpers ──────────────────────────────────────────────────────────
 
@@ -335,6 +346,25 @@ class GameEngine:
         self.log(f"{self.current_player().name} passes")
         self._advance_turn()
 
+    def do_buy_slot_bundle(self, player: "Player") -> bool:
+        """Purchase a bundle of EXTRA_BATTERY_SLOTS_PER_PURCHASE slots for EXTRA_BATTERY_COST pts."""
+        if player.extra_battery_slots + EXTRA_BATTERY_SLOTS_PER_PURCHASE > MAX_EXTRA_BATTERY_SLOTS:
+            return False
+        player.extra_battery_slots += EXTRA_BATTERY_SLOTS_PER_PURCHASE
+        self.log(
+            f"{player.name} buys +{EXTRA_BATTERY_SLOTS_PER_PURCHASE} battery slots "
+            f"(capacity now {player.battery_capacity}, −{EXTRA_BATTERY_COST} pt)"
+        )
+        return True
+
+    def do_undo_slot_bundle(self, player: "Player") -> bool:
+        """Undo the most recent bundle purchase for the given player."""
+        if player.extra_battery_slots < EXTRA_BATTERY_SLOTS_PER_PURCHASE:
+            return False
+        player.extra_battery_slots -= EXTRA_BATTERY_SLOTS_PER_PURCHASE
+        self.log(f"{player.name} cancelled battery slot bundle purchase")
+        return True
+
     def force_end_of_day(self):
         """Manually trigger end-of-day (e.g. via UI button)."""
         self.day_ended = True
@@ -373,6 +403,7 @@ class GameEngine:
             self.day_ended = False
             self.current_player_idx = 0
             self.action_state = "reveal"   # every new day starts with a mandatory reveal
+            self.pre_day_pending = True    # UI will show the start-of-day slot popup
             self._assign_priorities()
             # Attach next-day info to the summary so the UI can display it
             self.day_summary["next_day"] = DAYS[self.current_day]
@@ -393,7 +424,7 @@ class GameEngine:
         recovered = 0
 
         if balance >= 0:
-            batteries_stored = min(balance, BATTERY_CAPACITY - player.battery_storage)
+            batteries_stored = min(balance, player.battery_capacity - player.battery_storage)
             player.battery_storage += batteries_stored
             self.log(f"{player.name}: +{balance} surplus → stored {batteries_stored} batteries")
         else:
@@ -412,7 +443,7 @@ class GameEngine:
                 self.log(f"{player.name}: used {batteries_used} batteries to cover deficit")
 
         if recovery > 0:
-            recovered = min(recovery, BATTERY_CAPACITY - player.battery_storage)
+            recovered = min(recovery, player.battery_capacity - player.battery_storage)
             player.battery_storage += recovered
             self.log(f"{player.name}: recovered {recovered} energy from orders ♻")
 

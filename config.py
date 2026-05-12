@@ -24,7 +24,14 @@ STARTING_BATTERIES = 1
 
 # Bonus points for stored batteries at game end
 #   key = minimum number of batteries needed to earn that many points
-BATTERY_BONUS = {2: 1, 4: 2, 5: 3}
+#   Extended to reward extra battery slots (capacity above 5)
+BATTERY_BONUS = {2: 1, 4: 2, 5: 3, 7: 5, 9: 7}
+
+# Extra battery slots purchasable once per day (at start-of-day)
+# Players buy a bundle of EXTRA_BATTERY_SLOTS_PER_PURCHASE slots for EXTRA_BATTERY_COST pts
+EXTRA_BATTERY_COST = 1                  # points deducted per bundle purchased
+EXTRA_BATTERY_SLOTS_PER_PURCHASE = 4   # slots gained per bundle
+MAX_EXTRA_BATTERY_SLOTS = 8            # hard cap (2 bundles per player)
 
 # ─── Conventional (fossil) energy ─────────────────────────────────────────────
 

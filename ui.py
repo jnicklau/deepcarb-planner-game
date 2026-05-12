@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox
 
 from config import (
     DAYS, ROWS_PER_DAY, BATTERY_CAPACITY, CONV_ENERGY_PENALTY,
+    EXTRA_BATTERY_COST, MAX_EXTRA_BATTERY_SLOTS, EXTRA_BATTERY_SLOTS_PER_PURCHASE,
     PLAYER_COLORS, PLAYER_COLOR_NAMES, PLAYER_DEFAULT_NAMES,
     THEME, ICONS, FONTS,
 )
@@ -233,6 +234,9 @@ class DeepCarbPlannerApp(tk.Tk):
         self._build_main_area()
         self._build_action_bar()
         self._bind_game_keys()
+        # Day 1 pre-day slot offers
+        if self.engine.pre_day_pending:
+            self._show_pre_day_popup()
         self._refresh_ui()
 
     # ── Layout builders ───────────────────────────────────────────────────────
@@ -589,7 +593,7 @@ class DeepCarbPlannerApp(tk.Tk):
             # Battery & CO₂ summary
             tk.Label(
                 pframe,
-                text=f"{player.battery_storage}/{BATTERY_CAPACITY}",
+                text=f"{player.battery_storage}/{player.battery_capacity}",
                 font=FONTS["heading"], fg=THEME["battery"], bg=THEME["bg_dark"], width=4,
             ).grid(row=0, column=6, rowspan=ROWS_PER_DAY)
             tk.Label(
@@ -649,7 +653,7 @@ class DeepCarbPlannerApp(tk.Tk):
             ).pack(side="left", padx=6)
 
         summary = (
-            f"Battery: {player.battery_storage}/{BATTERY_CAPACITY}  |  "
+            f"Battery: {player.battery_storage}/{player.battery_capacity}  |  "
             f"CO₂: {player.conventional_energy}  |  "
             f"Energy today: {player.energy_in_day(eng.current_day)} {ICONS['energy']}  |  "
             f"Need today: {player.energy_needed_day(eng.current_day)} {ICONS['energy']}"
@@ -789,7 +793,123 @@ class DeepCarbPlannerApp(tk.Tk):
         if self.engine.game_over:
             self._show_end_screen()
         else:
+            if self.engine.pre_day_pending:
+                self._show_pre_day_popup()    # blocks until player closes it
             self._refresh_ui()
+
+    # ── Pre-day slot purchase popup ─────────────────────────────────────────
+
+    def _show_pre_day_popup(self):
+        """Shown at the start of every day so players can buy a battery slot bundle."""
+        self.engine.pre_day_pending = False
+        day_name = DAYS[self.engine.current_day]
+        players  = self.engine.players
+
+        win = tk.Toplevel(self)
+        win.title(f"Start of {day_name} — Battery Upgrades")
+        win.configure(bg=THEME["bg_dark"])
+        win.grab_set()
+        win.resizable(False, False)
+
+        tk.Label(
+            win, text=f"Start of {day_name}",
+            font=FONTS["title"], fg=THEME["accent"], bg=THEME["bg_dark"],
+        ).pack(pady=(20, 4), padx=30)
+        tk.Label(
+            win,
+            text=(
+                f"{ICONS['battery']} Buy +{EXTRA_BATTERY_SLOTS_PER_PURCHASE} battery slots "
+                f"for −{EXTRA_BATTERY_COST} pt"
+            ),
+            font=FONTS["heading"], fg=THEME["battery"], bg=THEME["bg_dark"],
+        ).pack(pady=(0, 4))
+        tk.Label(
+            win,
+            text=f"Keys 1–{len(players)} to toggle  ·  Enter to confirm  ·  max {MAX_EXTRA_BATTERY_SLOTS} extra slots",
+            font=FONTS["tiny"], fg=THEME["muted"], bg=THEME["bg_dark"],
+        ).pack(pady=(0, 14))
+
+        slot_purchased: dict = {}   # player → bool
+        slot_btn_widgets: dict = {}
+
+        def _update_btn(player):
+            bought   = slot_purchased.get(player, False)
+            btn      = slot_btn_widgets[player]
+            can_buy  = player.extra_battery_slots + EXTRA_BATTERY_SLOTS_PER_PURCHASE <= MAX_EXTRA_BATTERY_SLOTS
+            cap_now  = player.battery_capacity
+            cap_next = cap_now + EXTRA_BATTERY_SLOTS_PER_PURCHASE
+            if bought:
+                btn.config(
+                    text=f"✓ +{EXTRA_BATTERY_SLOTS_PER_PURCHASE} slots bought  (cap {cap_now+EXTRA_BATTERY_SLOTS_PER_PURCHASE})  [toggle to undo]",
+                    bg=THEME["accent"], fg=THEME["bg_dark"],
+                )
+            elif not can_buy:
+                btn.config(
+                    text=f"At max capacity ({cap_now} slots)",
+                    bg=THEME["bg_taken"], fg=THEME["dim"],
+                    state="disabled",
+                )
+            else:
+                btn.config(
+                    text=f"{ICONS['battery']} Buy +{EXTRA_BATTERY_SLOTS_PER_PURCHASE} slots  "
+                         f"({cap_now} → {cap_next} cap)  −{EXTRA_BATTERY_COST} pt",
+                    bg=THEME["bg_taken"], fg=THEME["muted"],
+                    state="normal",
+                )
+
+        def _toggle(player):
+            bought  = slot_purchased.get(player, False)
+            can_buy = player.extra_battery_slots + EXTRA_BATTERY_SLOTS_PER_PURCHASE <= MAX_EXTRA_BATTERY_SLOTS
+            if not bought and not can_buy:
+                return
+            slot_purchased[player] = not bought
+            _update_btn(player)
+
+        content = tk.Frame(win, bg=THEME["bg_dark"])
+        content.pack(padx=30, fill="x")
+
+        for i, p in enumerate(players):
+            row_f = tk.Frame(content, bg=THEME["bg_panel"], pady=6, padx=12)
+            row_f.pack(fill="x", pady=3)
+            tk.Label(
+                row_f, text=f"{i+1}.  {p.name}",
+                font=FONTS["normal"], fg=p.color, bg=THEME["bg_panel"],
+                width=14, anchor="w",
+            ).pack(side="left")
+            btn = tk.Button(
+                row_f, text="", font=FONTS["small"],
+                bg=THEME["bg_taken"], fg=THEME["muted"],
+                relief="flat", padx=8, pady=3, cursor="hand2",
+                command=lambda pl=p: _toggle(pl),
+            )
+            btn.pack(side="left", padx=8)
+            slot_btn_widgets[p] = btn
+            slot_purchased[p] = False
+            _update_btn(p)
+
+        def _confirm():
+            for p in players:
+                if slot_purchased.get(p, False):
+                    self.engine.do_buy_slot_bundle(p)
+            win.destroy()
+
+        _styled_button(
+            win, f"Begin {day_name}  [Enter]", THEME["accent"], _confirm,
+            padx=20, pady=8, font=FONTS["heading"],
+        ).pack(pady=16)
+
+        def _popup_key(event):
+            k = event.keysym
+            if k in ("Return", "KP_Enter"):
+                _confirm()
+            elif k.isdigit():
+                idx = int(k) - 1
+                if 0 <= idx < len(players):
+                    _toggle(players[idx])
+
+        win.bind("<Key>", _popup_key)
+        win.focus_set()
+        self.wait_window(win)
 
     # ── Day summary popup ────────────────────────────────────────────────────
 
@@ -867,7 +987,7 @@ class DeepCarbPlannerApp(tk.Tk):
                 rows.append((f"{ICONS['recover']} Energy recovered",
                              f"+{ps['recovered']}", THEME["accent"]))
             rows.append((f"{ICONS['battery']} Battery storage now",
-                         f"{ps['battery_total']}/{BATTERY_CAPACITY}", THEME["battery"]))
+                         f"{ps['battery_total']}/{p.battery_capacity}", THEME["battery"]))
 
             for r, (label, value, color) in enumerate(rows, start=1):
                 tk.Label(frame, text=label, font=FONTS["small"],
@@ -1133,6 +1253,11 @@ class DeepCarbPlannerApp(tk.Tk):
                 (f"Orders {ICONS['order']}",         f"+{bd['order_pts']} pts",   THEME["order"]),
                 (f"Battery bonus {ICONS['battery']}", f"+{bd['battery_bonus']} pts", THEME["battery"]),
                 (f"CO\u2082 penalty {ICONS['co2']}",    f"{bd['co2_penalty']} pts",  THEME["warning"]),
+            ]
+            if bd["slot_cost"] < 0:
+                rows.append((f"{ICONS['battery']} Slot purchases",
+                             f"{bd['slot_cost']} pts", THEME["warning"]))
+            rows += [
                 (f"Energy collected {ICONS['energy']}", f"{bd['total_energy']}",   THEME["muted"]),
                 ("Total",                             f"{total} pts",             "white"),
             ]
