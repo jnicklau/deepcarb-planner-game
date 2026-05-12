@@ -64,7 +64,6 @@ This project is licensed under the **Creative Commons Attribution-NonCommercial-
 
 You are free to:
 - **Use** and **share** this project for personal, educational, or research purposes
-- **Adapt** or build upon it
 
 Under the following conditions:
 - **Attribution** — You must give appropriate credit and link to this repository
