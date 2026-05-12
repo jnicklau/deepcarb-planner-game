@@ -148,6 +148,17 @@ class DeepCarbPlannerApp(tk.Tk):
         self._fw_running: bool = False
         self._fw_particles: list = []
         self._fw_after_id: str | None = None
+
+        # ── Screen-size detection ─────────────────────────────────────────
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        self._game_w = min(int(sw * 0.90), 1600)
+        self._game_h = min(int(sh * 0.90), 1000)
+        self._end_w  = min(int(sw * 0.70), 1100)
+        self._end_h  = min(int(sh * 0.80),  900)
+        self._tab_w  = min(int(sw * 0.90), 1600)
+        self._tab_h  = min(int(sh * 0.90), 1000)
+
         self._build_start_screen()
 
     # =========================================================================
@@ -228,7 +239,7 @@ class DeepCarbPlannerApp(tk.Tk):
 
     def _build_game_screen(self):
         self._clear_window()
-        self.geometry("1200x800")
+        self.geometry(f"{self._game_w}x{self._game_h}")
 
         self._build_top_bar()
         self._build_main_area()
@@ -328,9 +339,11 @@ class DeepCarbPlannerApp(tk.Tk):
                  fg=THEME["white"], bg=THEME["bg_dark"]).pack()
 
         canvas = tk.Canvas(center, bg=THEME["bg_dark"], highlightthickness=0)
-        vsb = ttk.Scrollbar(center, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
+        vsb = ttk.Scrollbar(center, orient="vertical",   command=canvas.yview)
+        hsb = ttk.Scrollbar(center, orient="horizontal", command=canvas.xview)
+        canvas.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.pack(side="right",  fill="y")
+        hsb.pack(side="bottom", fill="x")
         canvas.pack(side="left", fill="both", expand=True)
 
         self.factory_inner = tk.Frame(canvas, bg=THEME["bg_dark"])
@@ -338,6 +351,11 @@ class DeepCarbPlannerApp(tk.Tk):
         self.factory_inner.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        # Shift+MouseWheel scrolls horizontally
+        canvas.bind(
+            "<Shift-MouseWheel>",
+            lambda e: canvas.xview_scroll(-1 * (e.delta // 120), "units"),
         )
 
     def _build_right_panel(self, parent):
@@ -1170,7 +1188,7 @@ class DeepCarbPlannerApp(tk.Tk):
     def _show_end_screen(self):
         self._stop_fireworks()
         self._clear_window()
-        self.geometry("900x700")
+        self.geometry(f"{self._end_w}x{self._end_h}")
 
         # ── Fireworks strip ────────────────────────────────────────────────────
         fw_canvas = tk.Canvas(self, bg=THEME["bg_dark"], height=110,
@@ -1228,7 +1246,7 @@ class DeepCarbPlannerApp(tk.Tk):
         """Show the full game tableau in read-only mode; a Back button returns to scores."""
         self._stop_fireworks()
         self._clear_window()
-        self.geometry("1200x860")
+        self.geometry(f"{self._tab_w}x{self._tab_h}")
 
         self._build_top_bar()
         self._build_main_area()
