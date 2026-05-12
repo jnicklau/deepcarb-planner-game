@@ -11,6 +11,7 @@ from tkinter import ttk, messagebox
 from config import (
     DAYS, ROWS_PER_DAY, BATTERY_CAPACITY, CONV_ENERGY_PENALTY,
     EXTRA_BATTERY_COST, MAX_EXTRA_BATTERY_SLOTS, EXTRA_BATTERY_SLOTS_PER_PURCHASE,
+    BATTERY_BONUS,
     PLAYER_COLORS, PLAYER_COLOR_NAMES, PLAYER_DEFAULT_NAMES,
     THEME, ICONS, FONTS,
 )
@@ -65,6 +66,52 @@ def _dur_color(dur: int) -> str:
         2: THEME["order_2d"],
         3: THEME["order_3d"],
     }.get(dur, "#555")
+
+
+_BONUS_GREEN = "#1e7b1e"   # dark green — readable on both bright-green fill and dark empty
+
+
+def _battery_canvas(
+    parent,
+    stored: int,
+    capacity: int,
+    w: int = 28,
+    h: int = 80,
+    bonus_map: dict | None = None,
+) -> tk.Canvas:
+    """Draw a vertical segmented battery; filled segments = stored (bottom to top).
+    bonus_map: {segment_index_from_bottom: label_str} — label drawn inside that segment.
+    """
+    SEG_GAP = 2
+    CAP_H   = 6
+    BORDER  = 2
+    GREEN   = THEME["battery"]
+    EMPTY   = THEME["bg_cell"]
+    BG      = THEME["bg_dark"]
+
+    c = tk.Canvas(parent, width=w, height=h, bg=BG, highlightthickness=0)
+    segs = max(capacity, 1)
+    body_h  = h - CAP_H - BORDER
+    seg_h   = max(3, (body_h - SEG_GAP * (segs - 1)) // segs)
+    cx      = w // 2
+
+    # Terminal cap
+    c.create_rectangle(cx - (w - 4) // 4, 0, cx + (w - 4) // 4, CAP_H,
+                       fill=GREEN, outline="")
+    # Body outline
+    body_y1 = CAP_H + BORDER + segs * seg_h + SEG_GAP * (segs - 1) + BORDER
+    c.create_rectangle(BORDER, CAP_H, w - BORDER, body_y1,
+                       outline=GREEN, fill=BG, width=BORDER)
+    # Segments bottom-to-top
+    for i in range(segs):
+        y1 = body_y1 - BORDER - i * (seg_h + SEG_GAP)
+        y0 = y1 - seg_h
+        c.create_rectangle(BORDER * 2, y0, w - BORDER * 2, y1,
+                           fill=GREEN if i < stored else EMPTY, outline="")
+        if bonus_map and i in bonus_map:
+            c.create_text(cx, (y0 + y1) // 2, text=bonus_map[i],
+                          font=("Helvetica", 7, "bold"), fill=_BONUS_GREEN, anchor="center")
+    return c
 
 
 def _order_tile_frame(
@@ -540,9 +587,12 @@ class DeepCarbPlannerApp(tk.Tk):
         tk.Label(header, text=ICONS["battery"], font=FONTS["small"],
                  fg=THEME["battery"], bg=THEME["bg_dark"], width=4
                  ).grid(row=0, column=6)
-        tk.Label(header, text="CO₂", font=FONTS["small"],
-                 fg=THEME["co2"], bg=THEME["bg_dark"], width=4
+        tk.Label(header, text=f"+{ICONS['battery']}", font=FONTS["small"],
+                 fg=THEME["battery"], bg=THEME["bg_dark"], width=4
                  ).grid(row=0, column=7)
+        tk.Label(header, text="CO\u2082", font=FONTS["small"],
+                 fg=THEME["co2"], bg=THEME["bg_dark"], width=4
+                 ).grid(row=0, column=8)
 
         # ── Per-player rows ────────────────────────────────────────────────────
         energy_colors = {
@@ -608,17 +658,42 @@ class DeepCarbPlannerApp(tk.Tk):
                             width=day_column_width +4, height=2, relief="solid", bd=0, padx=2,
                         ).grid(row=r, column=d + 1, padx=1, pady=1, sticky="nsew")
 
-            # Battery & CO₂ summary
-            tk.Label(
-                pframe,
-                text=f"{player.battery_storage}/{player.battery_capacity}",
-                font=FONTS["heading"], fg=THEME["battery"], bg=THEME["bg_dark"], width=4,
-            ).grid(row=0, column=6, rowspan=ROWS_PER_DAY)
+            # Battery columns + CO₂
+            bat_h        = ROWS_PER_DAY * 28
+            base_stored  = min(player.battery_storage, BATTERY_CAPACITY)
+            # bonus_map: segment index (0=bottom) → label for thresholds inside base battery
+            base_bonus_map = {
+                v - 1: f"+{pts}"
+                for v, pts in BATTERY_BONUS.items()
+                if 1 <= v <= BATTERY_CAPACITY
+            }
+            _battery_canvas(
+                pframe, stored=base_stored, capacity=BATTERY_CAPACITY,
+                w=28, h=bat_h, bonus_map=base_bonus_map,
+            ).grid(row=0, column=6, rowspan=ROWS_PER_DAY, padx=2, pady=2)
+
+            extra_cap    = player.extra_battery_slots
+            extra_stored = max(0, player.battery_storage - BATTERY_CAPACITY)
+            if extra_cap > 0:
+                extra_h = bat_h * extra_cap // BATTERY_CAPACITY
+                extra_bonus_map = {
+                    v - BATTERY_CAPACITY - 1: f"+{pts}"
+                    for v, pts in BATTERY_BONUS.items()
+                    if BATTERY_CAPACITY < v <= BATTERY_CAPACITY + extra_cap
+                }
+                _battery_canvas(
+                    pframe, stored=extra_stored, capacity=extra_cap,
+                    w=28, h=extra_h, bonus_map=extra_bonus_map,
+                ).grid(row=0, column=7, rowspan=ROWS_PER_DAY, padx=2, pady=2)
+            else:
+                tk.Label(pframe, bg=THEME["bg_dark"], width=4
+                         ).grid(row=0, column=7, rowspan=ROWS_PER_DAY)
+
             tk.Label(
                 pframe,
                 text=str(player.conventional_energy),
                 font=FONTS["heading"], fg=THEME["co2"], bg=THEME["bg_dark"], width=4,
-            ).grid(row=0, column=7, rowspan=ROWS_PER_DAY)
+            ).grid(row=0, column=8, rowspan=ROWS_PER_DAY)
 
     @staticmethod
     def _cell_appearance(tile, day: int, current_day: int, energy_colors: dict) -> tuple[str, str]:
@@ -767,6 +842,11 @@ class DeepCarbPlannerApp(tk.Tk):
                 messagebox.showwarning("No space", "Your factory is full for today!")
                 return
             eng.do_buy_energy(tile)
+            # Refresh and force-render so the tile appears in the factory
+            # planner (and vanishes from the weather column) before any
+            # end-of-day popup blocks the event loop.
+            self._refresh_ui()
+            self.update()
             self._post_action()
 
     def _on_order_click(self, order: dict):
