@@ -72,4 +72,4 @@ Under the following conditions:
 
 > © 2026 HTWG Konstanz. All commercial rights reserved.
 
-Full license text: https://creativecommons.org/licenses/by-nc/4.0/
+Full license text: https://creativecommons.org/licenses/by-nc-nd/4.0/
