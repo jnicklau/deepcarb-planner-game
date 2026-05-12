@@ -25,7 +25,7 @@ STARTING_BATTERIES = 1
 # Bonus points for stored batteries at game end
 #   key = minimum number of batteries needed to earn that many points
 #   Extended to reward extra battery slots (capacity above 5)
-BATTERY_BONUS = {2: 1, 4: 2, 5: 3, 9: 7}
+BATTERY_BONUS = {2: 1, 4: 2, 5: 3, 9: 6}
 
 # Extra battery slots purchasable once per day (at start-of-day)
 # Players buy a bundle of EXTRA_BATTERY_SLOTS_PER_PURCHASE slots for EXTRA_BATTERY_COST pts
@@ -37,6 +37,7 @@ MAX_EXTRA_BATTERY_SLOTS = 4            # hard cap (2 bundles per player)
 
 # Minus points per conventional energy tile purchased during end-of-day
 CONV_ENERGY_PENALTY = 2
+MAX_CO2 = 10   # bar cap; engine may allow more but the visual gauge tops out here
 
 # ─── Weather tile pool ────────────────────────────────────────────────────────
 # The combined deck of physical weather tiles drawn without replacement.

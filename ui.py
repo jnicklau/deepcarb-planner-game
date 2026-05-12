@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from config import (
-    DAYS, ROWS_PER_DAY, BATTERY_CAPACITY, CONV_ENERGY_PENALTY,
+    DAYS, ROWS_PER_DAY, BATTERY_CAPACITY, CONV_ENERGY_PENALTY, MAX_CO2,
     EXTRA_BATTERY_COST, MAX_EXTRA_BATTERY_SLOTS, EXTRA_BATTERY_SLOTS_PER_PURCHASE,
     BATTERY_BONUS,
     PLAYER_COLORS, PLAYER_COLOR_NAMES, PLAYER_DEFAULT_NAMES,
@@ -78,14 +78,18 @@ def _battery_canvas(
     w: int = 28,
     h: int = 80,
     bonus_map: dict | None = None,
+    bar_color: str | None = None,
+    label_color: str | None = None,
 ) -> tk.Canvas:
     """Draw a vertical segmented battery; filled segments = stored (bottom to top).
-    bonus_map: {segment_index_from_bottom: label_str} — label drawn inside that segment.
+    bonus_map:   {segment_index_from_bottom: label_str}
+    bar_color:   override fill/outline colour (defaults to THEME["battery"]).
+    label_color: override bonus text colour (defaults to _BONUS_GREEN).
     """
     SEG_GAP = 2
     CAP_H   = 6
     BORDER  = 2
-    GREEN   = THEME["battery"]
+    GREEN   = bar_color or THEME["battery"]
     EMPTY   = THEME["bg_cell"]
     BG      = THEME["bg_dark"]
 
@@ -109,8 +113,9 @@ def _battery_canvas(
         c.create_rectangle(BORDER * 2, y0, w - BORDER * 2, y1,
                            fill=GREEN if i < stored else EMPTY, outline="")
         if bonus_map and i in bonus_map:
-            c.create_text(cx, (y0 + y1) // 2, text=bonus_map[i],
-                          font=("Helvetica", 7, "bold"), fill=_BONUS_GREEN, anchor="center")
+                    c.create_text(cx, (y0 + y1) // 2, text=bonus_map[i],
+                                  font=("Helvetica", 7, "bold"),
+                                  fill=label_color or _BONUS_GREEN, anchor="center")
     return c
 
 
@@ -587,12 +592,11 @@ class DeepCarbPlannerApp(tk.Tk):
         tk.Label(header, text=ICONS["battery"], font=FONTS["small"],
                  fg=THEME["battery"], bg=THEME["bg_dark"], width=4
                  ).grid(row=0, column=6)
-        tk.Label(header, text=f"+{ICONS['battery']}", font=FONTS["small"],
-                 fg=THEME["battery"], bg=THEME["bg_dark"], width=4
-                 ).grid(row=0, column=7)
-        tk.Label(header, text="CO\u2082", font=FONTS["small"],
-                 fg=THEME["co2"], bg=THEME["bg_dark"], width=4
+
+        tk.Label(header, text="🏭 CO\u2082", font=FONTS["small"],
+                 fg=THEME["co2"], bg=THEME["bg_dark"], width=5
                  ).grid(row=0, column=8)
+
 
         # ── Per-player rows ────────────────────────────────────────────────────
         energy_colors = {
@@ -694,6 +698,18 @@ class DeepCarbPlannerApp(tk.Tk):
                 text=str(player.conventional_energy),
                 font=FONTS["heading"], fg=THEME["co2"], bg=THEME["bg_dark"], width=4,
             ).grid(row=0, column=8, rowspan=ROWS_PER_DAY)
+
+            # CO₂ gauge — same segmented bar reused with red fill, capped at MAX_CO2
+            co2_penalty_map = {
+                i: f"−{(i + 1) * CONV_ENERGY_PENALTY}"
+                for i in range(MAX_CO2)
+            }
+            co2_stored = min(player.conventional_energy, MAX_CO2)
+            _battery_canvas(
+                pframe, stored=co2_stored, capacity=MAX_CO2,
+                w=28, h=bat_h, bonus_map=co2_penalty_map,
+                bar_color=THEME["co2"], label_color="white",
+            ).grid(row=0, column=9, rowspan=ROWS_PER_DAY, padx=2, pady=2)
 
     @staticmethod
     def _cell_appearance(tile, day: int, current_day: int, energy_colors: dict) -> tuple[str, str]:
