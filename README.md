@@ -25,7 +25,7 @@ No third-party packages are required.
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/deepcarb-planner.git
+git clone https://github.com/jnicklau/deepcarb-planner-game
 cd deepcarb-planner
 
 # (Optional) create and activate a virtual environment
